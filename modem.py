@@ -15,7 +15,6 @@
 # Signed version at:
 # https://code.google.com/archive/p/powersdr-iq/downloads
 
-import serial
 import re
 import enum
 import time
@@ -68,8 +67,14 @@ class _ModemResultCodes(enum.Enum):
 _BUFSIZE = 4096      # number of bytes we try to read each time
 _SHORT_WAIT = 0.05   # seconds to wait when we read no data
 
+
+class DummyDialer:
+    def dial(self, to):
+        print(f"Dummydialer dialing: {to}")
+
+
 class Modem:
-    def __init__(self, serial_port):
+    def __init__(self, serial_port, dialer):
         self._serial_port = serial_port
         self._state = _ModemState.COMMAND
         self._debug = True
@@ -79,6 +84,7 @@ class Modem:
         self._escape_chars_read = 0
         self._current_s_register = 12
         self.set_defaults()
+        self._dialer = dialer
 
 
     def set_defaults(self):
@@ -109,7 +115,7 @@ class Modem:
     def escape_wait(self):
         return self._s[12] / 50
 
-        
+
     def _write_command_result(self, result, diagnostics=b''):
         if diagnostics != b'':
             diagnostics = b' (' + diagnostics.strip() + b')'
@@ -136,7 +142,7 @@ class Modem:
             self._serial_port.write(self.cr + self.lf + bs + self.cr + self.lf)
         else:
             self._serial_port.write(bs + self.cr + self.lf)
-        
+
 
     def _read_serial(self, nbytes=1):
         buf = b''
@@ -241,7 +247,7 @@ class Modem:
             self._serial_port.dtr = True
             self._state = _ModemState.ONLINE
             return b"simulated data connection"
-            
+
 
     def _at_command_q(self, value):
         assert value in [0,1,2]
@@ -279,7 +285,7 @@ class Modem:
         register = _tobstr(self._current_s_register)
         value = _tobstr(self._s[self._current_s_register])
         self._write_command_response(value)
-        return b'S[' + register + b']=' + value        
+        return b'S[' + register + b']=' + value
 
 
     _commands = {}
@@ -303,7 +309,7 @@ class Modem:
             if m:= re.match(b'\\s*\\+\\+\\+(.*)$', line):
                 line = m.group(1).strip
 
-            # Handle most commands
+            # Handle most of the supported AT-commands
             break_out = False
             for cmd in Modem._commands:
                 if m:= re.match(cmd + b'(\\d*)(.*)$', line):
@@ -321,13 +327,20 @@ class Modem:
                     break
             if break_out:
                 continue
-                
+
             # D: dial a number
             elif m:= re.match(b'D[PT]?(\s*\\+?[\d\s\\*\\#]+)\\;?$', line):
                 number = re.sub(b'\s', b'', m.group(1))
-                verbose.append(b"dialled " + number + b" for voice only")
                 line = b''
-                # if it actually connects to something that looks like data
+
+                try:
+                    self._dialer.dial(number.decode('ascii'))
+                    verbose.append(b"dialled " + number + b" for voice only")
+                except:
+                    result = _ModemResult.ERROR
+                    verbose.append(b"failed to dial")
+
+                # if we actually connect to something that looks like data
                 # from another modem, such as a telnet server,
                 # we should also send CONNECT later.
                 # But no CONNECT for voice calls.
@@ -342,6 +355,8 @@ class Modem:
 
 if __name__ == "__main__":
 
+    import serial
+
     def runmodem():
         global modem
 
@@ -353,7 +368,9 @@ if __name__ == "__main__":
             stopbits=serial.STOPBITS_ONE
             )
 
-        modem = Modem(serial_port)
+        dialer = DummyDialer()
+
+        modem = Modem(serial_port, dialer)
         while True:
             modem.run()
 
