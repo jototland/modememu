@@ -1,0 +1,8 @@
+<service>
+    <id>modem-service</id>
+    <name>modem-service</name>
+    <description>modem emulator service</description>
+    <executable>modememu.exe</executable>
+    <arguments></arguments>
+    <log mode="roll"></log>
+</service>

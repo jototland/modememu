@@ -1,0 +1,26 @@
+Step 1: Install com0com serial driver (or something equivalent)
+        Signed version at: https://code.google.com/archive/p/powersdr-iq/downloads
+        (Official version is at http://com0com.sourceforge.net/, but you really want the signed one)
+        Configure at least one serial port pair (e.g. COM10/COM11)
+Step 2: Move to the directory containing this file
+Step 3: Set up build environment (skip if you already have 'modememu.exe'):
+            python -mvenv venv
+            .\venv\Scripts\activate
+            pip install -r requirements.txt
+Step 4: Build program (skip if you already have 'modememu.exe'):
+            .\build.ps1
+Step 5: Edit configuration files 'serial.json' and create 'zisson.json' (see 'zisson-example.json')
+Step 6: Test run 'modememu.exe' from command line, and try to make a call
+Step 7: Download WinSW wrapper
+            curl https://github.com/winsw/winsw/releases/download/v2.11.0/WinSW-x64.exe -o modem-service.exe
+Step 8: Install service:
+            .\modem-service.exe install
+            get-service -name modem-service | select -property name,status,starttype
+            start-service -name modem-service
+            set-service -name modem-service -startuptype automatic
+            get-service -name modem-service | select -property name,status,starttype
+
+Step ∞: Uninstall service
+            set-service -name modem-service -startuptype manual
+            stop-service modem-service
+            .\modem-service.exe uninstall

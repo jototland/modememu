@@ -1,0 +1,4 @@
+pyinstaller
+pyserial
+pywin32
+requests

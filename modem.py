@@ -4,11 +4,12 @@
 # Interesting links about modems:
 # https://en.wikipedia.org/wiki/Command_and_Data_modes_(modem)
 # https://en.wikipedia.org/wiki/Hayes_command_set
+# https://www.itu.int/rec/T-REC-V.25ter/en
 # http://www.messagestick.net/modem/hayes_modem.html
 # https://support.usr.com/support/3453b/3453b-crg/chap%201-installing%20your%20modem.html
 
 # Documentation for pyserial:
-# https://pyserial.readthedocs.io/en/latest/pyserial_api.html#native-ports
+# https://pyserial.readthedocs.io/en/latest/pyserial_api.html
 
 # Virtual serial port driver:
 # http://com0com.sourceforge.net/
@@ -37,18 +38,25 @@ def _tobstr(v): # convert value to byte string
     return str(v).encode('ascii')
 
 
-def _bchr(n): # convert number to byte
+def _bchr(n): # convert numbers between 0 and 255 to bytestring of length 1
     return (n).to_bytes(1, byteorder='big')
 
 
+def _command_nop(legal_values=[]):
+    def nop(self, value):
+        if value not in legal_values:
+            raise NotImplementedError
+    return nop
+
+
 class _ModemState(enum.Enum):
-    # These values are arbitrary
+    # These values have no meaning outside this program
     COMMAND = 1
     ONLINE = 2
     ONLINE_COMMAND = 3
 
 class _ModemResult(enum.Enum):
-    # These values are fairly standard for Hayes compatible modems
+    # These values are standard for Hayes compatible modems
     OK = 0
     CONNECT = 1
     RING = 2
@@ -57,12 +65,6 @@ class _ModemResult(enum.Enum):
     NO_DIALTONE = 6
     BUSY = 7
     NO_ANSWER = 8
-
-class _ModemResultCodes(enum.Enum):
-    # These values are fairly standard for Hayes compatible modems
-    ENABLED = 0
-    ONLY_CR = 1
-    DISABLED = 2
 
 _BUFSIZE = 4096      # number of bytes we try to read each time
 _SHORT_WAIT = 0.05   # seconds to wait when we read no data
@@ -76,6 +78,7 @@ class DummyDialer:
 class Modem:
     def __init__(self, serial_port, dialer):
         self._serial_port = serial_port
+        self._serial_port.timeout = None
         self._state = _ModemState.COMMAND
         self._debug = True
         self._command_buffer = b''
@@ -90,13 +93,15 @@ class Modem:
     def set_defaults(self):
         self.command_mode_echo = True
         self.verbose_results = True
-        self.resultCodes = _ModemResultCodes.ENABLED
+        self.result_code_suppression = 0
         self._s = {
             2: ord('+'),    # escape character
             3: ord('\r'),   # line termination character
             4: ord('\n'),   # response formatting character
             5: ord('\b'),   # command line editing character
-            12: 50          # guard time for escape sequence in 1/50 seconds
+            12: 50,         # guard time for escape sequence in 1/50 seconds
+            # the following S-registers makes no sense in an emulator, but are common in init strings
+            0:0, 1:0, 6:0, 7:0, 9:0, 10:0, 11:0
             }
 
     @property
@@ -116,44 +121,44 @@ class Modem:
         return self._s[12] / 50
 
 
-    def _write_command_result(self, result, diagnostics=b''):
-        if diagnostics != b'':
-            diagnostics = b' (' + diagnostics.strip() + b')'
-        if self.resultCodes == _ModemResultCodes.ENABLED:
-            if self.verbose_results:
-                self._serial_port.write(
-                    self.cr + self.lf +
-                    result.name.replace('_', ' ').encode('ascii') +
-                    diagnostics + self.cr + self.lf)
-            else:
-                self._serial_port.write(
-                    str(result.value).encode('ascii') + self.cr)
-        elif self.resultCodes == _ModemResultCodes.ONLY_CR:
-            self._serial_port.write(self.cr)
-        elif self.resultCodes == _ModemResultCodes.DISABLED:
-            self._serial_port.write(b'')
+    def _set_state(self, state):
+        self._state = state
+        if state == _ModemState.ONLINE:
+            self._serial_port.timeout = 0
         else:
-            assert False, "_ModemResultCodes can only be ENABLED, ONLY_CR or DISABLED"
+            self._serial_port.timeout = None
 
 
-    def _write_command_response(self, bs):
-        assert type(bs) == bytes
+    def _write_command_result(self, result):
         if self.verbose_results:
-            self._serial_port.write(self.cr + self.lf + bs + self.cr + self.lf)
+            self._serial_port.write(
+                self.cr + self.lf +
+                _tobstr(result.name) +
+                self.cr + self.lf)
         else:
-            self._serial_port.write(bs + self.cr + self.lf)
+            self._serial_port.write(
+                _tobstr(str(result.value)) +
+                self.cr)
+
+
+    def _write_command_response(self, response):
+        assert type(response) == bytes
+        if self.verbose_results:
+            self._serial_port.write(self.cr + self.lf + response + self.cr + self.lf)
+        else:
+            self._serial_port.write(response + self.cr + self.lf)
 
 
     def _read_serial(self, nbytes=1):
-        buf = b''
-        while (data := self._serial_port.read(_BUFSIZE)) != b'':
-            buf += data
+        buf = self._serial_port.read(1)
+        while self._serial_port.in_waiting > 0:
+            buf += self._serial_port.read(self._serial_port.in_waiting)
         now = time.monotonic()
         if self._state == _ModemState.ONLINE:
             if (self._escape_chars_read == 3):
                 if now - self._last_data_read > self.escape_wait:
-                    self._state = _ModemState.ONLINE_COMMAND
-                    self._write_command_result(_ModemResult.OK, b"escape sequence read")
+                    self._set_state(_ModemState.ONLINE_COMMAND)
+                    self._write_command_result(_ModemResult.OK)
                     self._escape_chars_read = 0
                     self._command_buffer += buf
                 elif buf != b'':
@@ -162,11 +167,11 @@ class Modem:
                     self._last_data_read = now
             elif self._escape_chars_read > 0:
                 if (self._escape_chars_read == 1 and buf in [self.escape, self.escape * 2] or
-                    self._escape_chars_read == 2 and buf == self.escape):
+                        self._escape_chars_read == 2 and buf == self.escape):
                     self._escape_chars_read += len(buf)
                     self._last_data_read = now
                 elif buf != b'':
-                    self._data_buffer +- (self.escape + self._escape_chars_read) + buf
+                    self._data_buffer += (self.escape + self._escape_chars_read) + buf
                     self._escape_chars_read = 0
                     self._last_data_read = now
             elif (now - self._last_data_read > self.escape_wait and
@@ -180,28 +185,37 @@ class Modem:
             if buf != b'':
                 self._command_buffer += buf
                 if self.command_mode_echo:
-                    self._serial_port.write(buf)
-                    if buf[-1] == self.cr:
-                        self._serial_port.write(self.lf)
+                    if _bchr(buf[-1]) == self.cr:
+                        self._serial_port.write(buf + self.lf)
+                    else:
+                        self._serial_port.write(buf)
 
         return len(buf) != 0
 
 
     def run(self):
         while True:
-            if not self._read_serial():
-                time.sleep(_SHORT_WAIT)
-                continue
-            if self._state == _ModemState.COMMAND:
-                self._process_command_buffer()
-            elif self._state == _ModemState.ONLINE_COMMAND:
-                if self._data_buffer != b'':
-                    pass # FIXME: does nothing as of now
-                self._process_command_buffer()
-            elif self._state == _ModemState.ONLINE:
+            self.run_once()
+
+    def run_for(self, seconds):
+        start = time.monotonic()
+        while time.monotonic() < start + seconds:
+            self.run_once()
+
+    def run_once(self):
+        if not self._read_serial():
+            time.sleep(_SHORT_WAIT)
+            return
+        if self._state == _ModemState.COMMAND:
+            self._process_command_buffer()
+        elif self._state == _ModemState.ONLINE_COMMAND:
+            if self._data_buffer != b'':
                 pass # FIXME: does nothing as of now
-            else:
-                assert False, "Illegal value of Modem.state"
+            self._process_command_buffer()
+        elif self._state == _ModemState.ONLINE:
+            pass # FIXME: does nothing as of now
+        else:
+            assert False, "Illegal value of Modem._state"
 
 
     def _process_command_buffer(self):
@@ -219,85 +233,76 @@ class Modem:
             if m := re.match(b'^[aA][tT](.*)$', line):
                 self._process_at_commands(m.group(1).upper())
             else:
-                self._write_command_result(_ModemResult.ERROR, b'unrecognizable command')
+                self._write_command_result(_ModemResult.ERROR)
 
 
-    def _at_command_e(self, value):
+    def _command_ate(self, value):
             assert value in [0,1]
             self.command_mode_echo = bool(value)
-            return b'echo ' + _onoff(value)
 
 
-    def _at_command_h(self, value):
+    def _command_ath(self, value):
         assert value == 0
-        self._state = _ModemState.COMMAND
-        self._serial_port.dtr = 0
-        return b"on hook"
+        self._set_state(_ModemState.COMMAND)
 
 
-    def _at_command_o(self, value):
+    def _command_ato(self, value):
         assert (self._state == _ModemState.ONLINE_COMMAND and
                 value == 0 or
                 self._state in [_ModemState.COMMAND, _ModemState.ONLINE_COMMAND] and
                 value == 999)
         if value == 0:
-                pass # not implemented
+                raise "hell" # not implemented
         elif value == 999:
-            self._write_command_result(_ModemResult.OK)
-            self._serial_port.dtr = True
-            self._state = _ModemState.ONLINE
-            return b"simulated data connection"
+            self._set_state(_ModemState.ONLINE)
+
+    def _command_atq(self, value):
+        assert value in [0,1]
+        self.result_code_suppression = value
 
 
-    def _at_command_q(self, value):
-        assert value in [0,1,2]
-        self.resultCodes = _ModemResultCodes(value)
-        return (b'result codes: ' +
-                self.resultCodes.name.replace('_', ' ').lower().encode('ascii'))
-
-
-    def _at_command_s(self, value):
+    def _command_ats(self, value):
         assert value in self._s.keys()
         self._current_s_register = value
-        return b'S[' + _tobstr(value) + b']'
 
 
-    def _at_command_v(self, value):
+    def _command_atv(self, value):
         assert value in [0,1]
         self.verbose_results = value
-        return b'verbose ' + _onoff(value)
 
 
-    def _at_command_z(self,value):
+    def _command_atz(self,value):
         assert value == 0
         self.set_defaults()
-        return b'reset to factory defaults'
 
 
-    def _at_command_equals(self, value):
+    def _command_at_equals(self, value):
         assert type(value) == int and 0 <= value <= 255
         self._s[self._current_s_register] = value
-        return b"S[" + _tobstr(self._current_s_register) + b']=' + _tobstr(value)
 
 
-    def _at_command_question(self, value):
+    def _command_at_question(self, value):
         assert value == 0
         register = _tobstr(self._current_s_register)
         value = _tobstr(self._s[self._current_s_register])
         self._write_command_response(value)
-        return b'S[' + register + b']=' + value
 
 
     _commands = {}
-    _commands[b'E'] = _at_command_e
-    _commands[b'H'] = _at_command_h
-    _commands[b'O'] = _at_command_o
-    _commands[b'Q'] = _at_command_q
-    _commands[b'S'] = _at_command_s
-    _commands[b'V'] = _at_command_v
-    _commands[b'Z'] = _at_command_z
-    _commands[b'\\='] = _at_command_equals
-    _commands[b'\\?'] = _at_command_question
+    _commands[b'A'] = _command_nop()
+    _commands[b'B'] = _command_nop(range(2))
+    _commands[b'E'] = _command_ate
+    _commands[b'H'] = _command_ath
+    _commands[b'L'] = _command_nop(range(4))
+    _commands[b'M'] = _command_nop(range(4))
+    _commands[b'O'] = _command_ato
+    _commands[b'Q'] = _command_atq
+    _commands[b'S'] = _command_ats
+    _commands[b'V'] = _command_atv
+    _commands[b'X'] = _command_nop(range(5))
+    _commands[b'Z'] = _command_atz
+    _commands[b'\\='] = _command_at_equals
+    _commands[b'\\?'] = _command_at_question
 
 
     def _process_at_commands(self, line):
@@ -317,13 +322,9 @@ class Modem:
                     param = _int0(m.group(1))
                     line = m.group(2)
                     try:
-                        verbose.append(Modem._commands[cmd](self, param))
-                    except AssertionError:
-                        result = _ModemResult.ERROR
-                        verbose.append(_illval(param))
+                        Modem._commands[cmd](self, param)
                     except:
                         result = _ModemResult.ERROR
-                        verbose.append(b'unknown error')
                     break
             if break_out:
                 continue
@@ -335,10 +336,8 @@ class Modem:
 
                 try:
                     self._dialer.dial(number.decode('ascii'))
-                    verbose.append(b"dialled " + number + b" for voice only")
                 except:
                     result = _ModemResult.ERROR
-                    verbose.append(b"failed to dial")
 
                 # if we actually connect to something that looks like data
                 # from another modem, such as a telnet server,
@@ -348,31 +347,22 @@ class Modem:
             # otherwise: unknown command
             else:
                 result = _ModemResult.ERROR
-                verbose.append(b"unregognizable command")
                 break
 
-        self._write_command_result(result, b", ".join(verbose))
+        self._write_command_result(result)
 
 if __name__ == "__main__":
 
-    import serial
+    from init_serial import init_serial
 
     def runmodem():
         global modem
 
-        serial_port = serial.Serial(
-            port="COM11",
-            baudrate=115200,
-            bytesize=8,
-            timeout=0,
-            stopbits=serial.STOPBITS_ONE
-            )
-
+        serial_port = init_serial()
         dialer = DummyDialer()
-
         modem = Modem(serial_port, dialer)
-        while True:
-            modem.run()
+
+        modem.run()
 
 
     runmodem()
