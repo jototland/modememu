@@ -1,15 +1,17 @@
+"""run som simple tests on modem simulator"""
 import mockserial
 import modem
 
 s = mockserial.MockSerial()
+# pylint: disable=multiple-statements
 s.sendline_expect_echo('at'); s.expect('\r\nOK\r\n')
 s.sendline_expect_echo('   at    '); s.expect('\r\nOK\r\n')
-s.sendline_expect_echo('');
-s.sendline_expect_echo('   ');
+s.sendline_expect_echo('')
+s.sendline_expect_echo('   ')
 s.sendline_expect_echo('\b')
-s.send('a'); s.expect('a');
-s.send('t'); s.expect('t');
-s.send('\r'); s.expect('\r\n');
+s.send('a'); s.expect('a')
+s.send('t'); s.expect('t')
+s.send('\r'); s.expect('\r\n')
 s.expect('\r\nOK\r\n')
 s.sendline_expect_echo('xy\b\bat'); s.expect('\r\nOK\r\n')
 s.sendline_expect_echo('\u0000\u0000'); s.expect('\r\nERROR\r\n')

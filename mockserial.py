@@ -1,31 +1,30 @@
+"""Mock a serial line - used for testing modem emulator"""
 import time
 
 
 class IllegalModemOutput(BaseException):
-    def __init__(self, s):
-        super().__init__(s)
+    """raised when the modem outputs something unexpected"""
 
 
-def _bs(s):
-    assert type(s) in [str, bytes]
-    if type(s) == str:
-        return s.encode('cp437')
-    else:
-        return s
+def _bs(string):
+    assert isinstance(string, (str, bytes))
+    if isinstance(string, str):
+        return string.encode('cp437')
+    return string
 
 
-def _s(s):
-    assert type(s) in [str, bytes]
-    if type(s) == bytes:
-        return s.decode('cp437')
-    else:
-        return s
+def _s(string):
+    assert isinstance(string, (str, bytes))
+    if isinstance(string, bytes):
+        return string.decode('cp437')
+    return string
 
 
 _SHORT_WAIT = 0.1
 
 
 class MockSerial:
+    """Mock a serial line - used for testing modem emulator"""
     def __init__(self):
         self._start = time.monotonic()
         self._send = []
@@ -36,6 +35,7 @@ class MockSerial:
 
 
     def send(self, data):
+        """queue data to be sent later"""
         if self._send == []:
             self._send.append((self._start, _bs(data)))
         else:
@@ -44,24 +44,30 @@ class MockSerial:
 
 
     def send_expect_echo(self, data):
+        """queue data to be sent later, and queue expectation of echo """
         self.send(data)
         self.expect(data)
 
 
     def sendline(self, data):
+        """queue data to be sent later, followed by a carriage return"""
         self.send(_bs(data) + b'\r')
 
 
     def sendline_expect_echo(self, data):
+        """queue data to be sent later, followed by a carriage return,
+        and queue expection of echo"""
         self.send(_bs(data) + b'\r')
         self.expect(_bs(data) + b'\r\n')
 
 
     def expect(self, data):
+        """queue expection of data to receive back on serial line"""
         self._expect.append(_bs(data))
 
 
     def seconds(self):
+        """report number of seconds for simulation so far"""
         return _SHORT_WAIT * len(self._send) + _SHORT_WAIT
 
 
@@ -74,6 +80,7 @@ class MockSerial:
     ################################################
 
     def write(self, data):
+        """simulate serial.write"""
         self._firsttime()
         assert self._expectcount < len(self._expect)
         print(f"<=\t\t'{repr(data)[2:-1]}'")
@@ -86,6 +93,7 @@ class MockSerial:
 
 
     def read(self, _):
+        """simulate serial.read"""
         self._firsttime()
         if self._sendcount >= len(self._send):
             return b''
@@ -94,16 +102,14 @@ class MockSerial:
             print(f"=> '{repr(tosend)[2:-1]}'")
             self._sendcount += 1
             return tosend
-
-        else:
-            return b''
+        return b''
 
     @property
     def in_waiting(self):
+        """simulate serial.in_waiting"""
         if self._sendcount >= len(self._send):
             return 0
         clock, tosend = self._send[self._sendcount]
         if time.monotonic() > clock:
             return len(tosend)
-        else:
-            return 0
+        return 0
