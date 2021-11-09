@@ -19,9 +19,7 @@ pefile==2021.9.3
 pyinstaller==4.6
     # via -r requirements.in
 pyinstaller-hooks-contrib==2021.3
-    # via
-    #   -r requirements.in
-    #   pyinstaller
+    # via pyinstaller
 pyserial==3.5
     # via -r requirements.in
 pywin32==302

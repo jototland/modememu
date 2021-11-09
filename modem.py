@@ -2,8 +2,9 @@
 A modem emulator
  - meant for older software that wants to interface with a modem and make calls
 """
-import re
 import enum
+import logging
+import re
 import time
 
 
@@ -54,6 +55,9 @@ class Modem:
     """Simulates a modem"""
     # pylint: disable=too-many-instance-attributes
     def __init__(self, serial_port, dialer):
+        self._command_log = logging.getLogger('command').info
+        self._response_log = logging.getLogger('response').info
+
         self._serial_port = serial_port
         self._dialer = dialer
 
@@ -124,10 +128,12 @@ class Modem:
 
 
     def _write_command_result(self, result):
+        result_name = result.name.replace('_', ' ')
+        self._response_log(result_name)
         if self._verbose_results:
             self._serial_port.write(
                 self.carriage_return + self.line_feed +
-                _tobstr(result.name.replace('_', ' ')) +
+                _tobstr(result_name) +
                 self.carriage_return + self.line_feed)
         else:
             self._serial_port.write(
@@ -137,6 +143,7 @@ class Modem:
 
     def _write_command_response(self, response):
         assert isinstance(response, bytes)
+        self._response_log(response.strip().decode('cp437'))
         if self._verbose_results:
             self._serial_port.write(self.carriage_return + self.line_feed +
                                     response +
@@ -222,6 +229,7 @@ class Modem:
         while self.carriage_return in self._command_buffer:
             eol = self._command_buffer.find(self.carriage_return)
             line = self._command_buffer[:eol].strip()
+            self._command_log(line.strip().decode('cp437'))
             self._command_buffer = self._command_buffer[eol+1:]
             while self.backspace in line:
                 line = re.sub(b'[^' + self.backspace + b']' + self.backspace, b'', line)
