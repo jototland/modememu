@@ -2,3 +2,4 @@ pyinstaller
 pyserial
 pywin32
 requests
+pip_system_certs

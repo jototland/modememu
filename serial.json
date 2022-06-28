@@ -1,7 +1,8 @@
 {
-    "port": "COM11",
-    "baudrate": 115200,
+    "port": "COM4",
+    "baudrate": 9600,
     "bytesize": 8,
-    "stopbits": 1
+    "stopbits": 1,
+    "dialer": "phonelog"
 }
 

@@ -1,34 +1,28 @@
-"""Wraps a dialer and converts input from the modem to E164 format"""
+"""Convert phone number to E.164 format (digits prefixed by +)"""
 import re
 
-class SimpleE164Adapter:
-    """Wraps a dialer and converts input from the modem to E164 format"""
-    def __init__(self, country_code, local_code, dialer):
-        if isinstance(country_code, int):
-            country_code = str(int)
-        if isinstance(local_code, int):
-            local_code = str(int)
-        elif local_code is None:
-            local_code = ''
-        assert isinstance(country_code, str) and re.match(r'\d+', country_code)
-        assert isinstance(local_code, str) and re.match(r'\d*', local_code)
-        self._country_code = country_code
-        self._local_code = local_code
-        self._dialer = dialer
+def to_e164(number, country_code='', local_code=''):
+    """Convert phone number to E.164 format (digits prefixed by +)"""
+    number = str(number)
+    country_code = str(country_code)
+    local_code = str(local_code)
+    digits = re.sub(r'\D', '', number)
 
+    if re.match(r'^\+', number):
+        return f"+{digits}"
 
-    def dial(self, to_number):
-        """Converts number to E164 format and dials using the stored dialer"""
-        if isinstance(to_number, int):
-            to_number = str(to_number)
-        to_number = to_number.replace(' ', '')
-        if re.match(r'\+\d+$', to_number):
-            self._dialer.dial(to_number)
-        elif matches := re.match(r'00(\d+)$', to_number):
-            self._dialer.dial(f"+{matches.group(1)}")
-        elif matches := re.match(r'0(\d+)$', to_number):
-            self._dialer.dial(f"+{self._country_code}{matches.group(1)}")
-        elif re.match(r'\d+$', to_number):
-            self._dialer.dial(f"+{self._country_code}{self._local_code}{to_number}")
-        else:
-            raise ValueError(f"number must contain only digits: {to_number}")
+    if re.match(r'^00', number):
+        return f"+{digits[2:]}"
+
+    if re.match(r'^\+', country_code):
+        country_code = country_code[1:]
+    if re.match(r'^00', country_code):
+        country_code = country_code[2:]
+
+    if re.match(r'^0', number):
+        return f"+{country_code}{digits[1:]}"
+
+    if re.match(r'^0', local_code):
+        local_code = local_code[1:]
+
+    return f"+{country_code}{local_code}{digits}"

@@ -1,6 +1,8 @@
 """
 A modem emulator
- - meant for older software that wants to interface with a modem and make calls
+
+ - meant for older software that uses a modem for dialing,
+   emulate the modem and replace ATDT-commands with an api call
 """
 import enum
 import logging
@@ -66,7 +68,6 @@ class Modem:
         self._state = _ModemState.COMMAND
 
         self._command_buffer = b''
-        self._data_buffer = b''
 
         self._last_data_read = 0.0
         self._escape_chars_read = 0
@@ -102,17 +103,24 @@ class Modem:
         return _bchr(self._s[2])
     @property
 
+
     def carriage_return(self):
         """returns the current CR character, default \\r"""
         return _bchr(self._s[3])
+
+
     @property
     def line_feed(self):
         """returns the current LF character, default \\n"""
         return _bchr(self._s[4])
+
+
     @property
     def backspace(self):
         """returns the current backspace character, default \\b"""
         return _bchr(self._s[5])
+
+
     @property
     def escape_wait(self):
         """returns the current waiting period for escape sequence in seconds, default 1s"""
@@ -166,7 +174,7 @@ class Modem:
                     self._escape_chars_read = 0
                     self._command_buffer += buf
                 elif buf != b'':
-                    self._data_buffer += (self.escape * self._escape_chars_read) + buf
+                    # any data read is thrown away, this isn't a real modem
                     self._escape_chars_read = 0
                     self._last_data_read = now
             elif self._escape_chars_read > 0:
@@ -175,7 +183,7 @@ class Modem:
                     self._escape_chars_read += len(buf)
                     self._last_data_read = now
                 elif buf != b'':
-                    self._data_buffer += (self.escape + self._escape_chars_read) + buf
+                    # any data read is thrown away, this isn't a real modem
                     self._escape_chars_read = 0
                     self._last_data_read = now
             elif (now - self._last_data_read > self.escape_wait and
@@ -183,7 +191,7 @@ class Modem:
                 self._escape_chars_read = len(buf)
                 self._last_data_read = now
             elif buf != b'':
-                self._data_buffer += buf
+                # any data read is thrown away, this isn't a real modem
                 self._last_data_read = now
         elif self._state in [_ModemState.COMMAND, _ModemState.ONLINE_COMMAND]:
             if buf != b'':
@@ -202,11 +210,13 @@ class Modem:
         while True:
             self.run_once()
 
+
     def run_for(self, seconds):
         """runs the modem for the given number of seconds"""
         start = time.monotonic()
         while time.monotonic() < start + seconds:
             self.run_once()
+
 
     def run_once(self):
         """does one pass of the inner loop for running the modem"""
@@ -216,11 +226,9 @@ class Modem:
         if self._state == _ModemState.COMMAND:
             self._process_command_buffer()
         elif self._state == _ModemState.ONLINE_COMMAND:
-            if self._data_buffer != b'':
-                pass # FIXME: does nothing as of now
             self._process_command_buffer()
         elif self._state == _ModemState.ONLINE:
-            pass # FIXME: does nothing as of now
+            pass
         else:
             assert False, "Illegal value of Modem._state"
 
@@ -364,7 +372,7 @@ class Modem:
                 continue
 
             # D: dial a number
-            if matches := re.match(b'D[PT]?(\\s*\\+?[\\d\\s\\*\\#]+)\\;?$', line):
+            if matches := re.match(b'D[PT]?(\\s*\\+?[\\d\\s]+)\\;?$', line):
                 number = re.sub(b'\\s', b'', matches.group(1))
                 line = b''
 
@@ -373,10 +381,7 @@ class Modem:
                 except (ValueError, NotImplementedError):
                     result = _ModemResult.ERROR
 
-                # if we actually connect to something that looks like data
-                # from another modem, such as a telnet server,
-                # we should also send CONNECT later.
-                # But no CONNECT for voice calls.
+                # no CONNECT for voice calls, this isn't a real modem
 
             # otherwise: unknown command
             else:

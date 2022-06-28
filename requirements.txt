@@ -14,12 +14,18 @@ future==0.18.2
     # via pefile
 idna==3.3
     # via requests
+packaging==21.3
+    # via setuptools-scm
 pefile==2021.9.3
     # via pyinstaller
+pip-system-certs==2.1
+    # via -r requirements.in
 pyinstaller==4.6
     # via -r requirements.in
 pyinstaller-hooks-contrib==2021.3
     # via pyinstaller
+pyparsing==3.0.9
+    # via packaging
 pyserial==3.5
     # via -r requirements.in
 pywin32==302
@@ -28,8 +34,16 @@ pywin32-ctypes==0.2.0
     # via pyinstaller
 requests==2.26.0
     # via -r requirements.in
+setuptools-scm==7.0.2
+    # via pip-system-certs
+tomli==2.0.1
+    # via setuptools-scm
+typing-extensions==4.2.0
+    # via setuptools-scm
 urllib3==1.26.7
     # via requests
+wrapt==1.14.1
+    # via pip-system-certs
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools

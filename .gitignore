@@ -6,4 +6,4 @@ __pycache__
 *.log
 *.old
 *.exe
-zisson.json
+phonelog.json
