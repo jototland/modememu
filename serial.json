@@ -2,7 +2,6 @@
     "port": "COM4",
     "baudrate": 9600,
     "bytesize": 8,
-    "stopbits": 1,
-    "dialer": "phonelog"
+    "stopbits": 1
 }
 

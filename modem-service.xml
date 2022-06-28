@@ -2,7 +2,7 @@
     <id>modem-service</id>
     <name>modem-service</name>
     <description>modem emulator service</description>
-    <executable>modememu.exe</executable>
-    <arguments></arguments>
+    <executable>emb_py\python.exe</executable>
+    <arguments>main.py</arguments>
     <log mode="roll"></log>
 </service>

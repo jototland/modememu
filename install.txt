@@ -1,24 +1,48 @@
 Step 1: Install com0com serial driver (or something equivalent)
         Signed version at: https://code.google.com/archive/p/powersdr-iq/downloads
         (Official version is at http://com0com.sourceforge.net/, but you really want the signed one)
-        Configure at least one serial port pair (e.g. COM10/COM11)
+        curl -o setup_com0com_W7_x64_signed.exe https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/powersdr-iq/setup_com0com_W7_x64_signed.exe
+        Configure at least one serial port pair (recommended: COM3/COM4)
+
 Step 2: Move to the directory containing this file
-Step 3: Set up build environment (skip if you already have 'modememu.exe'):
-            python -mvenv venv
-            .\venv\Scripts\activate
-            pip install -r requirements.txt
-Step 4: Build program (skip if you already have 'modememu.exe'):
-            .\build.ps1
-Step 5: Edit configuration files 'serial.json' and create 'zisson.json' (see 'zisson-example.json')
-Step 6: Test run 'modememu.exe' from command line, and try to make a call
-Step 7: Download WinSW wrapper
-            curl https://github.com/winsw/winsw/releases/download/v2.11.0/WinSW-x64.exe -o modem-service.exe
-Step 8: Install service:
-            .\modem-service.exe install
-            get-service -name modem-service | select -property name,status,starttype
-            start-service -name modem-service
-            set-service -name modem-service -startuptype automatic
-            get-service -name modem-service | select -property name,status,starttype
+
+Step 3: Upgrade with git, or run the following commands in powershell to get the latest version:
+        curl -o modememu.zip https://github.com/jototland/modememu/archive/refs/heads/main.zip
+        Expand-Archive -Path .\modememu.zip -DestinationPath . -Verbose
+        mv -Force modememu-main\*.* .
+        rmdir -Recurse modememu-main
+
+Step 4: Install embedded python and dependencies in subdirectory
+        curl -o python-3.10.5-embed-amd64.zip https://www.python.org/ftp/python/3.10.5/python-3.10.5-embed-amd64.zip
+        rm -ErrorAction SilentlyContinue -Recurse .\emb_py
+        Expand-Archive -Path .\python-3.10.5-embed-amd64.zip -DestinationPath .\emb_py -Verbose
+        curl -o get-pip.py https://bootstrap.pypa.io/get-pip.py
+        .\emb_py\python.exe .\get-pip.py
+        rm .\emb_py\*._pth
+        rm get-pip.py
+        .\emb_py\python.exe -mpip install -r requirements.txt
+
+Step 5: configure phonelog.json
+        Look at phonelog-example.json for details.
+
+Step 6: configure serial.json
+        The COM port you set here is the one the modem emulator uses.
+        The other COM port will be used by whatever program you are using
+        Make sure the baudrate is set to the same as whatever program you are using.
+        The other settings: bytesize and stopbits should probably not be touched.
+
+Step 7: Test run
+        Make sure to set whatever program you are using to use the COM port not used by the modem
+        .\emb_py\python main.py
+        End with Ctrl+Break (Ctrl+C doesn't work)
+
+Step 8: Install as a service with WinSW
+        curl  -o modem-service.exe https://github.com/winsw/winsw/releases/download/v2.11.0/WinSW-x64.exe
+        .\modem-service.exe install
+
+Step 9: start service in windows
+
+Step 10: Test again
 
 Step ∞: Uninstall service
             set-service -name modem-service -startuptype manual

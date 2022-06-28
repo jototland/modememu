@@ -4,34 +4,22 @@
 #
 #    pip-compile --output-file=requirements.txt requirements.in
 #
-altgraph==0.17.2
-    # via pyinstaller
 certifi==2021.10.8
     # via requests
 charset-normalizer==2.0.7
     # via requests
-future==0.18.2
-    # via pefile
 idna==3.3
     # via requests
 packaging==21.3
     # via setuptools-scm
-pefile==2021.9.3
-    # via pyinstaller
 pip-system-certs==2.1
     # via -r requirements.in
-pyinstaller==4.6
-    # via -r requirements.in
-pyinstaller-hooks-contrib==2021.3
-    # via pyinstaller
 pyparsing==3.0.9
     # via packaging
 pyserial==3.5
     # via -r requirements.in
 pywin32==302
     # via -r requirements.in
-pywin32-ctypes==0.2.0
-    # via pyinstaller
 requests==2.26.0
     # via -r requirements.in
 setuptools-scm==7.0.2
