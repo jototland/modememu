@@ -1,50 +1,73 @@
-Step 1: Install com0com serial driver (or something equivalent)
-        Signed version at: https://code.google.com/archive/p/powersdr-iq/downloads
-        (Official version is at http://com0com.sourceforge.net/, but you really want the signed one)
-        curl -o setup_com0com_W7_x64_signed.exe https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/powersdr-iq/setup_com0com_W7_x64_signed.exe
-        Configure at least one serial port pair (recommended: COM3/COM4)
+Trinn 1: Installer com0com serial driver
+         Signert versjon: https://code.google.com/archive/p/powersdr-iq/downloads
+         (Offisiell versjon: http://com0com.sourceforge.net/, men bruk den signerte)
 
-Step 2: Move to the directory containing this file
+         curl -o setup_com0com_W7_x64_signed.exe https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/powersdr-iq/setup_com0com_W7_x64_signed.exe
+         .\setup_com0com_W7_x64_signed.exe
 
-Step 3: Upgrade with git, or run the following commands in powershell to get the latest version:
-        curl -o modememu.zip https://github.com/jototland/modememu/archive/refs/heads/main.zip
-        Expand-Archive -Path .\modememu.zip -DestinationPath . -Verbose
-        mv -Force modememu-main\*.* .
-        rmdir -Recurse modememu-main
+         Konfigurer minst et serieport-par (foreslår: COM3/COM4)
 
-Step 4: Install embedded python and dependencies in subdirectory
-        curl -o python-3.10.5-embed-amd64.zip https://www.python.org/ftp/python/3.10.5/python-3.10.5-embed-amd64.zip
-        rm -ErrorAction SilentlyContinue -Recurse .\emb_py
-        Expand-Archive -Path .\python-3.10.5-embed-amd64.zip -DestinationPath .\emb_py -Verbose
-        curl -o get-pip.py https://bootstrap.pypa.io/get-pip.py
-        .\emb_py\python.exe .\get-pip.py
-        rm .\emb_py\*._pth
-        rm get-pip.py
-        .\emb_py\python.exe -mpip install -r requirements.txt
+Trinn 2: I egnet mappe, pakk ut distribusjonen med git, eller kjør kommandoene:
 
-Step 5: configure phonelog.json
-        Look at phonelog-example.json for details.
+         curl -o modememu.zip https://github.com/jototland/modememu/archive/refs/heads/main.zip
+         Expand-Archive -Path .\modememu.zip -DestinationPath . -Verbose
+         mv -Force modememu-main\*.* .
+         rmdir -Recurse modememu-main
 
-Step 6: configure serial.json
-        The COM port you set here is the one the modem emulator uses.
-        The other COM port will be used by whatever program you are using
-        Make sure the baudrate is set to the same as whatever program you are using.
-        The other settings: bytesize and stopbits should probably not be touched.
+Trinn 4: Installer embedded python og nødvendige biblioteker i en undermappe
 
-Step 7: Test run
-        Make sure to set whatever program you are using to use the COM port not used by the modem
-        .\emb_py\python main.py
-        End with Ctrl+Break (Ctrl+C doesn't work)
+         curl -o python-3.10.5-embed-amd64.zip https://www.python.org/ftp/python/3.10.5/python-3.10.5-embed-amd64.zip
+         rm -ErrorAction SilentlyContinue -Recurse .\emb_py
+         Expand-Archive -Path .\python-3.10.5-embed-amd64.zip -DestinationPath .\emb_py -Verbose
+         curl -o get-pip.py https://bootstrap.pypa.io/get-pip.py
+         .\emb_py\python.exe .\get-pip.py
+         rm .\emb_py\*._pth
+         rm get-pip.py
+         .\emb_py\python.exe -mpip install -r requirements.txt
 
-Step 8: Install as a service with WinSW
-        curl  -o modem-service.exe https://github.com/winsw/winsw/releases/download/v2.11.0/WinSW-x64.exe
-        .\modem-service.exe install
+Trinn 5: Konfigurer domenenavn, brukernavn og passord i phonelog.json
+         Benytt phonelog-example.json som eksempel.
 
-Step 9: start service in windows
+Trinn 6: Konfigurer serial.json
+         COM-porten du setter her vil være den modememulatoren bruker. Anbefalt: COM4
+         Den andre COM-porten er for Safecon. Anbefalt: COM3
+         Baudrate bør være lik begge steder. Anbefalt: 9600
+         Bytestørrelse og stopbits bør antagelig ikke røres (8 og 1)
 
-Step 10: Test again
+Trinn 7: Konfigurer safecon MMI
+         I kcsop.ini søk etter [AUTODIAL]. Sett:
 
-Step ∞: Uninstall service
-            set-service -name modem-service -startuptype manual
-            stop-service modem-service
-            .\modem-service.exe uninstall
+         AutoDial=1
+         UseTAPI=0
+         UseCOM4500=0
+         PortNo=3
+         BaudRate=9600
+         Parity=NONE
+         DataBits=8
+         StopBits=1
+         InitString=ATZ
+         DialString=ATDT
+         HangupString=ATH
+         TalkString=ATZ
+         CallTimeout=5
+
+         PortNo=3 betyr at vi skal bruke COM3
+
+Trinn 8: Kjør modememulatoren fra kommandolinjen og gjør et testoppkall fra Safecon (eller putty)
+
+         .\emb_py\python main.py
+
+         Avslutt emulatoren med Ctrl+Break (Ctrl+C virker ikke)
+
+Trinn 8: Installer emulator som en windows service med WinSW
+
+         curl  -o modem-service.exe https://github.com/winsw/winsw/releases/download/v2.11.0/WinSW-x64.exe
+         .\modem-service.exe install
+
+Trinn 9: start windows service «modem-service»
+
+Trinn 10: Test igjen. Avslutt hvis det virker.
+
+Trinn ∞: For å avinstallere «modem-service»
+
+         .\modem-service.exe uninstall
