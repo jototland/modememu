@@ -1,6 +1,6 @@
 {
     "hostname": "phonelog.example.com",
+    "country_code": "+47",
     "username": "workstation33",
-    "password": "mah-sEcret!",
-    "country_code": "+47"
+    "password": "sEcReT!"
 }

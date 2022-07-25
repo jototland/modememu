@@ -1,8 +1,58 @@
 """run som simple tests on modem simulator"""
-import mockserial
-import modem
+import serial
 
-s = mockserial.MockSerial()
+
+def _bs(string):
+    if isinstance(string, str):
+        return string.encode('cp437')
+    return string
+
+
+def _s(string):
+    if isinstance(string, bytes):
+        return string.decode('cp437')
+    return string
+
+class SerialTester:
+    """Helper class to test serial lines"""
+    def __init__(self, port):
+        self._port = port
+        self._sendcount = 0
+
+
+    def send(self, data):
+        self._port.write(_bs(data))
+
+
+    def send_expect_echo(self, data):
+        self.send(data)
+        self.expect(data)
+
+
+    def sendline(self, data):
+        self.send(_bs(data) + b'\r')
+
+
+    def sendline_expect_echo(self, data):
+        self.send(_bs(data) + b'\r')
+        self.expect(_bs(data) + b'\r\n')
+
+
+    def expect(self, data):
+        data = _bs(data)
+        read = b''
+        while len(read) < len(data) and data.startswith(read):
+            read += self._port.read(min(self._port.in_waiting or 1,
+                                        len(data) - len(read)))
+        if read != data:
+            print(f"Expectation failed:")
+            print(f"    Expected: {repr(data)}")
+            print(f"    Got     : {repr(read)}")
+
+
+port = serial.Serial(port='COM3', baudrate=9600, bytesize=8, stopbits=1)
+s = SerialTester(port)
+
 # pylint: disable=multiple-statements
 s.sendline_expect_echo('at'); s.expect('\r\nOK\r\n')
 s.sendline_expect_echo('   at    '); s.expect('\r\nOK\r\n')
@@ -63,8 +113,4 @@ s.sendline_expect_echo('atx4'); s.expect('\r\nOK\r\n')
 s.sendline_expect_echo('atx5'); s.expect('\r\nERROR\r\n')
 s.sendline_expect_echo('atz'); s.expect('\r\nOK\r\n')
 
-dialer = modem.DummyDialer()
-
-modem = modem.Modem(s, dialer)
-modem.run_for(s.seconds())
 print("Tests completed")

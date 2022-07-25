@@ -43,8 +43,6 @@ class _ModemResult(enum.Enum):
     NO_ANSWER = 8
 
 _BUFSIZE = 4096      # number of bytes we try to read each time
-_SHORT_WAIT = 0.05   # seconds to wait when we read no data
-
 
 class DummyDialer:
     """A dummy dialer for testing"""
@@ -129,10 +127,6 @@ class Modem:
 
     def _set_state(self, state):
         self._state = state
-        if state == _ModemState.ONLINE:
-            self._serial_port.timeout = 0
-        else:
-            self._serial_port.timeout = None
 
 
     def _write_command_result(self, result):
@@ -162,9 +156,7 @@ class Modem:
 
     def _read_serial(self):
         # pylint: disable=too-many-branches
-        buf = self._serial_port.read(1)
-        while self._serial_port.in_waiting > 0:
-            buf += self._serial_port.read(self._serial_port.in_waiting)
+        buf = self._serial_port.read(self._serial_port.in_waiting or 1)
         now = time.monotonic()
         if self._state == _ModemState.ONLINE:
             if self._escape_chars_read == 3:
@@ -202,7 +194,7 @@ class Modem:
                     else:
                         self._serial_port.write(buf)
 
-        return len(buf) != 0
+        return len(buf)
 
 
     def run(self):
@@ -211,18 +203,9 @@ class Modem:
             self.run_once()
 
 
-    def run_for(self, seconds):
-        """runs the modem for the given number of seconds"""
-        start = time.monotonic()
-        while time.monotonic() < start + seconds:
-            self.run_once()
-
-
     def run_once(self):
         """does one pass of the inner loop for running the modem"""
-        if not self._read_serial():
-            time.sleep(_SHORT_WAIT)
-            return
+        self._read_serial()
         if self._state == _ModemState.COMMAND:
             self._process_command_buffer()
         elif self._state == _ModemState.ONLINE_COMMAND:
